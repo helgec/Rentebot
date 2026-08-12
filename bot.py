@@ -1,13 +1,18 @@
+import os
 import time
 import threading
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv  # 👈 Importerer dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
-# 🛑 LIM INN DINE NØKLER HER:
-SLACK_BOT_TOKEN = "SLACK_BOT_TOKEN"
-SLACK_APP_TOKEN = "SLACK_APP_TOKEN"
+# Laster inn variablene fra .env-filen lokalt
+load_dotenv()
+
+# Henter hemmelighetene trygt fra miljøvariabler
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
+SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
 
 app = App(token=SLACK_BOT_TOKEN)
 
