@@ -44,7 +44,7 @@ def finn_styringsrente():
         print(f"❌ Feil ved tilkobling til Norges Bank: {e}")
         
     return None
-
+@app.command("/ny-rente")
 def monitor_loop(channel_id):
     global is_monitoring, last_text
     print("🔁 Overvåking startet (stoppes automatisk etter 10 minutter)...")
