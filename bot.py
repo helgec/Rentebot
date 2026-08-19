@@ -47,9 +47,12 @@ def finn_styringsrente():
 
 def monitor_loop(channel_id):
     global is_monitoring, last_text
-    print("🔁 Overvåking startet i bakgrunnen...")
+    print("🔁 Overvåking startet (stoppes automatisk etter 10 minutter)...")
     
-    while is_monitoring:
+    start_time = time.time()
+    VARIGHET_SEKUNDER = 600  # 10 minutter (10 * 60)
+    
+    while is_monitoring and (time.time() - start_time < VARIGHET_SEKUNDER):
         rente_tekst = finn_styringsrente()
         if rente_tekst:
             if last_text is None:
@@ -61,6 +64,15 @@ def monitor_loop(channel_id):
                 )
                 last_text = rente_tekst
         time.sleep(3)
+    
+    # Sjekk om løkken stoppet fordi tiden gikk ut (og ikke fordi den ble stoppet manuelt)
+    if is_monitoring:
+        is_monitoring = False
+        app.client.chat_postMessage(
+            channel=channel_id,
+            text="🛑 *Søk avsluttet*"
+        )
+        print("⏰ 10 minutter har gått. Søk avsluttet.")
 
 @app.command("/sjekk-rente")
 def handle_sjekk_rente(ack, respond):
