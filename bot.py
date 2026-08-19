@@ -1,3 +1,4 @@
+import re
 import os
 import time
 import threading
@@ -34,17 +35,15 @@ def finn_styringsrente():
             for el in soup.find_all(True):
                 if 'Styringsrenten' in el.text:
                     tekst = el.get_text(separator=" ", strip=True)
-                    # Sjekker at vi har prosentsymbol og at teksten er spisset (under 150 tegn)
-                    if "%" in tekst and len(tekst) < 150:
-                        return tekst
-        else:
-            print(f"⚠️ Norges Bank svarte med statuskode: {response.status_code}")
-
+                    # Henter KUN "Styringsrenten nå X,XX%" og kaster resten av teksten
+                    match = re.search(r"(Styringsrenten\s+nå\s+\d+[\.,]\d+\s*%)", tekst, re.IGNORECASE)
+                    if match:
+                        return match.group(1)
     except Exception as e:
         print(f"❌ Feil ved tilkobling til Norges Bank: {e}")
         
     return None
-@app.command("/ny-rente")
+
 def monitor_loop(channel_id):
     global is_monitoring, last_text
     print("🔁 Overvåking startet (stoppes automatisk etter 10 minutter)...")
@@ -80,7 +79,8 @@ def handle_sjekk_rente(ack, respond):
     respond("Sjekker Norges Bank... ⏳")
     rente_tekst = finn_styringsrente()
     if rente_tekst:
-        respond(f"📊 *Status fra Norges Bank akkurat nå:*\n```{rente_tekst}```")
+        # '#' foran gjør teksten stor i Slack
+        respond(f"# 🏦 {rente_tekst}")
     else:
         respond("❌ Klarte ikke å hente status fra Norges Bank.")
 
@@ -96,7 +96,7 @@ def handle_start(ack, respond, command):
     channel_id = command['channel_id']
     monitoring_thread = threading.Thread(target=monitor_loop, args=(channel_id,))
     monitoring_thread.start()
-    respond("🚀 *Overvåking startet!* Sjekker Norges Bank hvert 3. sekund...")
+    respond("🚀 *# Overvåking startet!* Sjekker Norges Bank hvert 3. sekund...")
 
 @app.command("/stopp-overvaking")
 def handle_stop(ack, respond):
