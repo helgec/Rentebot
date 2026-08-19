@@ -22,15 +22,27 @@ monitoring_thread = None
 TARGET_URL = "https://www.norges-bank.no/"
 
 def finn_styringsrente():
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Cache-Control": "no-cache"
+    }
     try:
-        response = requests.get(TARGET_URL, headers={"Cache-Control": "no-cache"}, timeout=5)
+        response = requests.get(TARGET_URL, headers=headers, timeout=5)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
+            
             for el in soup.find_all(True):
-                if 'Styringsrenten nå' in el.text and len(el.children) > 0:
-                    return el.get_text(separator=" ", strip=True)
+                if 'Styringsrenten' in el.text:
+                    tekst = el.get_text(separator=" ", strip=True)
+                    # Sjekker at vi har prosentsymbol og at teksten er spisset (under 150 tegn)
+                    if "%" in tekst and len(tekst) < 150:
+                        return tekst
+        else:
+            print(f"⚠️ Norges Bank svarte med statuskode: {response.status_code}")
+
     except Exception as e:
-        print(f"Feil ved henting: {e}")
+        print(f"❌ Feil ved tilkobling til Norges Bank: {e}")
+        
     return None
 
 def monitor_loop(channel_id):
