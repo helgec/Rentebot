@@ -37,11 +37,11 @@ def finn_styringsrente():
 
 def monitor_loop(channel_id):
     global last_text
-    print("🔁 Overvåking startet (stoppes automatisk etter 10 minutter)...")
+    print("🔁 Overvåking startet (stoppes automatisk etter 2 minutter)...")
     
     start_time = time.time()
-    VARIGHET_SEKUNDER = 600  # 10 minutter
-    SLEEP_INTERVAL = 15      # Sjekker hvert 15. sekund
+    VARIGHET_SEKUNDER = 120  # 2 minutter (2 * 60 sekunder)
+    SLEEP_INTERVAL = 3       # Sjekker hvert 3. sekund
 
     while not stop_event.is_set() and (time.time() - start_time < VARIGHET_SEKUNDER):
         rente_tekst = finn_styringsrente()
@@ -55,17 +55,17 @@ def monitor_loop(channel_id):
                 )
                 last_text = rente_tekst
         
-        # Vent i 15 sekunder, eller avbryt umiddelbart dersom stop_event blir satt
+        # Vent i 3 sekunder, eller avbryt umiddelbart dersom stop_event blir satt
         stop_event.wait(SLEEP_INTERVAL)
 
-    # Sjekk om løkken stoppet fordi tiden gikk ut
+    # Sjekk om løkken stoppet fordi tiden (2 minutter) gikk ut
     if not stop_event.is_set():
         stop_event.set()
         app.client.chat_postMessage(
             channel=channel_id,
-            text="🛑 *Søk avsluttet (10 minutter har gått)*"
+            text="🛑 *Søk avsluttet (2 minutter har gått)*"
         )
-        print("⏰ 10 minutter har gått. Søk avsluttet.")
+        print("⏰ 2 minutter har gått. Søk avsluttet.")
 
 @app.command("/sjekk-rente")
 def handle_sjekk_rente(ack, respond):
@@ -91,14 +91,14 @@ def handle_start(ack, respond, command):
     channel_id = command['channel_id']
     monitoring_thread = threading.Thread(target=monitor_loop, args=(channel_id,))
     monitoring_thread.start()
-    respond("🚀 *Overvåking startet!* Sjekker Norges Bank hvert 15. sekund...")
+    respond("🚀 *Overvåking startet!* Sjekker Norges Bank hvert 3. sekund i 2 minutter...")
 
 @app.command("/stopp-overvaking")
 def handle_stop(ack, respond):
     ack()
     if monitoring_thread and monitoring_thread.is_alive():
         stop_event.set()
-        respond("🛑 Overvåking er slått av.")
+        respond("🛑 Overvåking er slått av manuelt.")
     else:
         respond("⚠️ Det kjører ingen overvåking for øyeblikket.")
 
