@@ -16,7 +16,8 @@ app = App(token=SLACK_BOT_TOKEN)
 
 # Trådstyring og globale tilstander
 stop_event = threading.Event()
-last_text = None
+last_date = None
+last_rate = None
 monitoring_thread = None
 TARGET_URL = "https://www.norges-bank.no/"
 
@@ -27,38 +28,50 @@ def finn_styringsrente():
         if response.status_code == 200:
             lines = response.text.strip().splitlines()
             if len(lines) >= 2:
-                # Siste linje inneholder nyeste observasjon
                 data = lines[-1].split(";")
+                
+                # Henter dato (TIME_PERIOD, indeks 8) og verdi (OBS_VALUE, indeks 10)
+                dato = data[8].replace('"', '').strip()
                 rente_verdi = data[10].replace('"', '').strip()
-                return f"Styringsrenten nå {rente_verdi}%"
+                
+                return {"dato": dato, "verdi": rente_verdi}
     except Exception as e:
         print(f"❌ Feil ved henting fra Norges Bank API: {e}")
     return None
 
 def monitor_loop(channel_id):
-    global last_text
+    global last_date, last_rate
     print("🔁 Overvåking startet (stoppes automatisk etter 2 minutter)...")
     
     start_time = time.time()
-    VARIGHET_SEKUNDER = 120  # 2 minutter (2 * 60 sekunder)
-    SLEEP_INTERVAL = 3       # Sjekker hvert 3. sekund
+    VARIGHET_SEKUNDER = 120  # 2 minutter
+    SLEEP_INTERVAL = 3       # 3 sekunder
 
     while not stop_event.is_set() and (time.time() - start_time < VARIGHET_SEKUNDER):
-        rente_tekst = finn_styringsrente()
-        if rente_tekst:
-            if last_text is None:
-                last_text = rente_tekst
-            elif rente_tekst != last_text:
+        data = finn_styringsrente()
+        if data:
+            ny_dato = data["dato"]
+            ny_rente = data["verdi"]
+
+            if last_date is None:
+                # Første kjøring: sett baseline
+                last_date = ny_dato
+                last_rate = ny_rente
+            elif ny_dato != last_date:
+                # Ny dato registrert hos Norges Bank (ny rentebeslutning)
+                uendret_tag = " (uendret)" if ny_rente == last_rate else ""
+                melding = f"Styringsrente per {ny_dato}: {ny_rente}%{uendret_tag}"
+
                 app.client.chat_postMessage(
                     channel=channel_id,
-                    text=f"🚨 *ENDRING I STYRINGSRENTEN!* 🚨\n\n```{rente_tekst}```\n\n<{TARGET_URL}|Åpne Norges Bank>"
+                    text=f"📢 *NY RENTEBESLUTNING FRA NORGES BANK!* 📢\n\n```{melding}```\n\n<{TARGET_URL}|Åpne Norges Bank>"
                 )
-                last_text = rente_tekst
-        
-        # Vent i 3 sekunder, eller avbryt umiddelbart dersom stop_event blir satt
+                
+                last_date = ny_dato
+                last_rate = ny_rente
+
         stop_event.wait(SLEEP_INTERVAL)
 
-    # Sjekk om løkken stoppet fordi tiden (2 minutter) gikk ut
     if not stop_event.is_set():
         stop_event.set()
         app.client.chat_postMessage(
@@ -71,9 +84,9 @@ def monitor_loop(channel_id):
 def handle_sjekk_rente(ack, respond):
     ack()
     respond("Sjekker Norges Bank... ⏳")
-    rente_tekst = finn_styringsrente()
-    if rente_tekst:
-        respond(f"# 🏦 {rente_tekst}")
+    data = finn_styringsrente()
+    if data:
+        respond(f"# 🏦 Styringsrente per {data['dato']}: {data['verdi']}%")
     else:
         respond("❌ Klarte ikke å hente status fra Norges Bank.")
 
@@ -82,7 +95,6 @@ def handle_start(ack, respond, command):
     global monitoring_thread
     ack()
     
-    # Sjekker om tråden allerede kjører
     if monitoring_thread and monitoring_thread.is_alive():
         respond("⚠️ Overvåking kjører allerede!")
         return
