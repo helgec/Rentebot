@@ -61,7 +61,7 @@ def start_intensiv_overvaking():
             if ny_dato != last_date:
                 uendret_tag = " (uendret)" if ny_rente == last_rate else ""
                 melding = (
-                    f"📢 *NY RENTEBESLUTNING FRA NORGES BANK!* 📢\n\n"
+                    f"🏦 *NY RENTEBESLUTNING FRA NORGES BANK!* 💰\n\n"
                     f"```Styringsrente per {ny_dato}: {ny_rente}%{uendret_tag}```\n\n"
                     f"<{TARGET_URL}|Åpne Norges Bank>"
                 )
