@@ -18,14 +18,11 @@ DATOER = {
 def finn_styringsrente():
     url = "https://data.norges-bank.no/api/data/IR/B.KPRA.SD.R?format=csv&lastNObservations=1"
     try:
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=15)  # <--- Endret fra 5 til 15
         if response.status_code == 200:
             lines = [l.strip() for l in response.text.strip().splitlines() if l.strip()]
             if len(lines) >= 2:
-                # Spleiser siste linje på semikolon og fjerner hermetegn
                 deler = [d.replace('"', '').strip() for d in lines[-1].split(';')]
-                
-                # Indeks 7 er TIME_PERIOD (dato) og indeks 8 er OBS_VALUE (rente)
                 if len(deler) >= 9:
                     return {"dato": deler[7], "verdi": deler[8]}
     except Exception as e:
