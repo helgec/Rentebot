@@ -1,8 +1,7 @@
-import csv
-import io
 import os
 import time
 import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -16,67 +15,70 @@ DATOER = {
     "2027-01-21", "2027-03-18", "2027-05-05", "2027-06-17", "2027-08-19"
 }
 
-def finn_styringsrente():
-    url = "https://data.norges-bank.no/api/data/IR/B.KPRA.SD.R?format=csv&lastNObservations=1"
+def finn_siste_pressemelding():
+    """Henter nyeste pressemelding fra Norges Banks RSS-feed."""
+    url = "https://www.norges-bank.no/rss/Pressemeldinger/"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
-            # Les CSV dynamisk basert på kolonnenavn
-            f = io.StringIO(response.text)
-            reader = csv.DictReader(f, delimiter=';')
-            for row in reader:
-                ren_rad = {k.replace('"', '').strip(): v.replace('"', '').strip() for k, v in row.items() if k}
-                dato = ren_rad.get("TIME_PERIOD")
-                rente_verdi = ren_rad.get("OBS_VALUE")
+            root = ET.fromstring(response.content)
+            items = root.findall("./channel/item")
+            for item in items:
+                title_elem = item.find("title")
+                link_elem = item.find("link")
                 
-                if dato and rente_verdi:
-                    return {"dato": dato, "verdi": rente_verdi}
+                tittel = title_elem.text.strip() if title_elem is not None and title_elem.text else ""
+                lenke = link_elem.text.strip() if link_elem is not None and link_elem.text else TARGET_URL
+                
+                # Sjekker at saken handler om rente
+                if "rente" in tittel.lower():
+                    return {"tittel": tittel, "lenke": lenke}
     except Exception as e:
-        print(f"❌ Feil ved henting: {e}")
+        print(f"❌ Feil ved henting av RSS: {e}")
     return None
 
 def send_til_slack(melding):
     if not SLACK_WEBHOOK_URL:
-        print("⚠️ Feil: Fant ingen SLACK_WEBHOOK_URL i miljøvariablene!")
+        print("⚠️ Feil: Fant ingen SLACK_WEBHOOK_URL!")
         return
-        
     try:
         requests.post(SLACK_WEBHOOK_URL, json={"text": melding})
     except Exception as e:
         print(f"❌ Feil ved sending til Slack: {e}")
 
 def start_intensiv_overvaking():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Starter intensiv overvåking...")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Starter intensiv sanntidsovervåking av pressemeldinger...")
     
-    baseline = finn_styringsrente()
-    if not baseline:
-        return
-
-    last_date = baseline["dato"]
-    last_rate = baseline["verdi"]
+    baseline = finn_siste_pressemelding()
+    siste_tittel = baseline["tittel"] if baseline else ""
     
     start_time = time.time()
     
-    while time.time() - start_time < 900:  # Kjører i 15 minutter
-        data = finn_styringsrente()
-        if data:
-            ny_dato = data["dato"]
-            ny_rente = data["verdi"]
+    # Sjekker hvert 2. sekund i opptil 10 minutter
+    while time.time() - start_time < 600:
+        sak = finn_siste_pressemelding()
+        if sak:
+            ny_tittel = sak["tittel"]
+            lenke = sak["lenke"]
             
-            if ny_dato != last_date:
-                uendret_tag = " (uendret)" if ny_rente == last_rate else ""
+            # Utløses i samme sekund som en ny overskrift legges ut
+            if ny_tittel != siste_tittel:
                 melding = (
                     f"🏦 *NY RENTEBESLUTNING FRA NORGES BANK!* 💰\n\n"
-                    f"```Styringsrente per {ny_dato}: {ny_rente}%{uendret_tag}```\n\n"
-                    f"<{TARGET_URL}|Åpne Norges Bank>"
+                    f"```{ny_tittel}```\n\n"
+                    f"<{lenke}|Les pressemeldingen hos Norges Bank>"
                 )
                 send_til_slack(melding)
+                print(f"✅ Ny rentebeslutning sendt til Slack: {ny_tittel}")
                 return 
                 
-        time.sleep(3)
+        time.sleep(2)
+
+    print("⚠️ Overvåking fullført etter 10 minutter uten ny pressemelding.")
 
 def monitor_loop():
-    print("🤖 Rentebot kjører i bakgrunnen...")
+    print("🤖 Rentebot kjører i bakgrunnen (sanntidsovervåking)...")
     while True:
         naa = datetime.now()
         dagens_dato = naa.strftime("%Y-%m-%d")
@@ -85,7 +87,7 @@ def monitor_loop():
             start_intensiv_overvaking()
             time.sleep(180) 
         else:
-            time.sleep(10)
+            time.sleep(5)
 
 if __name__ == "__main__":
     monitor_loop()
