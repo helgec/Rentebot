@@ -20,12 +20,14 @@ def finn_styringsrente():
     try:
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
-            lines = response.text.strip().splitlines()
+            lines = [l.strip() for l in response.text.strip().splitlines() if l.strip()]
             if len(lines) >= 2:
-                data = lines[-1].split(";")
-                dato = data[8].replace('"', '').strip()
-                rente_verdi = data[9].replace('"', '').strip()
-                return {"dato": dato, "verdi": rente_verdi}
+                # Spleiser siste linje på semikolon og fjerner hermetegn
+                deler = [d.replace('"', '').strip() for d in lines[-1].split(';')]
+                
+                # Indeks 7 er TIME_PERIOD (dato) og indeks 8 er OBS_VALUE (rente)
+                if len(deler) >= 9:
+                    return {"dato": deler[7], "verdi": deler[8]}
     except Exception as e:
         print(f"❌ Feil ved henting: {e}")
     return None
