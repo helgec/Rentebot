@@ -1,3 +1,5 @@
+import csv
+import io
 import os
 import time
 import requests
@@ -6,7 +8,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Henter URL fra enten .env eller systemd-miljøet
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 TARGET_URL = "https://www.norges-bank.no/"
 
@@ -18,13 +19,18 @@ DATOER = {
 def finn_styringsrente():
     url = "https://data.norges-bank.no/api/data/IR/B.KPRA.SD.R?format=csv&lastNObservations=1"
     try:
-        response = requests.get(url, timeout=15)  # <--- Endret fra 5 til 15
+        response = requests.get(url, timeout=15)
         if response.status_code == 200:
-            lines = [l.strip() for l in response.text.strip().splitlines() if l.strip()]
-            if len(lines) >= 2:
-                deler = [d.replace('"', '').strip() for d in lines[-1].split(';')]
-                if len(deler) >= 9:
-                    return {"dato": deler[7], "verdi": deler[8]}
+            # Les CSV dynamisk basert på kolonnenavn
+            f = io.StringIO(response.text)
+            reader = csv.DictReader(f, delimiter=';')
+            for row in reader:
+                ren_rad = {k.replace('"', '').strip(): v.replace('"', '').strip() for k, v in row.items() if k}
+                dato = ren_rad.get("TIME_PERIOD")
+                rente_verdi = ren_rad.get("OBS_VALUE")
+                
+                if dato and rente_verdi:
+                    return {"dato": dato, "verdi": rente_verdi}
     except Exception as e:
         print(f"❌ Feil ved henting: {e}")
     return None
