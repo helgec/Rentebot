@@ -52,7 +52,7 @@ def start_intensiv_overvaking():
     
     start_time = time.time()
     
-    while time.time() - start_time < 120:  # Kjører i 2 minutter
+    while time.time() - start_time < 900:  # Kjører i 15 minutter
         data = finn_styringsrente()
         if data:
             ny_dato = data["dato"]
