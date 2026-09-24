@@ -24,7 +24,7 @@ def finn_styringsrente():
             if len(lines) >= 2:
                 data = lines[-1].split(";")
                 dato = data[8].replace('"', '').strip()
-                rente_verdi = data[10].replace('"', '').strip()
+                rente_verdi = data[9].replace('"', '').strip()
                 return {"dato": dato, "verdi": rente_verdi}
     except Exception as e:
         print(f"❌ Feil ved henting: {e}")
