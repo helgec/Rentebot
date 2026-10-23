@@ -1,9 +1,14 @@
 import os
+import sys
 import time
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from dotenv import load_dotenv
+
+# Importer status-hjelperen (lagt til sammen med de andre overvåkerne)
+sys.path.append("/home/nrknyheter")
+from status_helper import update_status
 
 load_dotenv()
 
@@ -27,15 +32,17 @@ def finn_siste_pressemelding():
             for item in items:
                 title_elem = item.find("title")
                 link_elem = item.find("link")
-                
+
                 tittel = title_elem.text.strip() if title_elem is not None and title_elem.text else ""
                 lenke = link_elem.text.strip() if link_elem is not None and link_elem.text else TARGET_URL
-                
+
                 # Sjekker at saken handler om rente
                 if "rente" in tittel.lower():
                     return {"tittel": tittel, "lenke": lenke}
     except Exception as e:
-        print(f"❌ Feil ved henting av RSS: {e}")
+        err_msg = f"Feil ved henting av RSS: {e}"
+        print(f"❌ {err_msg}")
+        update_status("rentebot", "Rentebot-overvåker", status="ERROR", error_msg=err_msg)
     return None
 
 def send_til_slack(melding):
@@ -49,19 +56,24 @@ def send_til_slack(melding):
 
 def start_intensiv_overvaking():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Starter intensiv sanntidsovervåking av pressemeldinger...")
-    
+
     baseline = finn_siste_pressemelding()
     siste_tittel = baseline["tittel"] if baseline else ""
-    
+
+    update_status(
+        "rentebot", "Rentebot-overvåker", status="OK",
+        last_message=f"Starter overvåking. Baseline: {siste_tittel or 'ingen rentepressemelding funnet'}"
+    )
+
     start_time = time.time()
-    
+
     # Sjekker hvert 2. sekund i opptil 10 minutter
     while time.time() - start_time < 600:
         sak = finn_siste_pressemelding()
         if sak:
             ny_tittel = sak["tittel"]
             lenke = sak["lenke"]
-            
+
             # Utløses i samme sekund som en ny overskrift legges ut
             if ny_tittel != siste_tittel:
                 melding = (
@@ -71,21 +83,26 @@ def start_intensiv_overvaking():
                 )
                 send_til_slack(melding)
                 print(f"✅ Ny rentebeslutning sendt til Slack: {ny_tittel}")
-                return 
-                
+                update_status("rentebot", "Rentebot-overvåker", status="OK", last_message=ny_tittel)
+                return
+
         time.sleep(2)
 
     print("⚠️ Overvåking fullført etter 10 minutter uten ny pressemelding.")
+    update_status(
+        "rentebot", "Rentebot-overvåker", status="OK",
+        last_message=f"Fullført uten ny beslutning. Siste kjente: {siste_tittel or 'ingen funnet'}"
+    )
 
 def monitor_loop():
     print("🤖 Rentebot kjører i bakgrunnen (sanntidsovervåking)...")
     while True:
         naa = datetime.now()
         dagens_dato = naa.strftime("%Y-%m-%d")
-        
+
         if dagens_dato in DATOER and naa.hour == 9 and naa.minute == 59:
             start_intensiv_overvaking()
-            time.sleep(180) 
+            time.sleep(180)
         else:
             time.sleep(5)
 
